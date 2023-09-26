@@ -1,5 +1,6 @@
 from voxypy.models import Entity, Voxel
 import numpy as np
+import random as r
 
 green = "\u001b[32m"
 white = "\u001b[37m"
@@ -69,10 +70,8 @@ def from_id(id:str) :
     dense = np.zeros(shape=(n,n,n),dtype=int)
     for (i,c) in enumerate(id) :
         if (c =='1'):
-            dense[i%n**2,i%n,i] = 1
+            dense[(i//n**2) %n][(i//n) %n][i%n] = 1
     print(dense)
-
-
 
 
 
@@ -107,7 +106,9 @@ def create_model(chunk:Entity, n:int=2) -> dict :
 def generate_struct(model:dict) -> Entity :
     """ Genere une structure a partir d'un modele
         en utilisant une implementation de la WFC"""
-    dense = np.array()
+    dense = from_id(r.randint(0,len(model)-1))
+    pass
+
 
 def place_struct(chunk:Entity, struct:Entity, x:int, y:int, z:int) -> Entity :
     """ Place une structure dans un chunk a une position donnee"""
