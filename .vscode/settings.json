@@ -1,0 +1,6 @@
+{
+    "ocaml.sandbox": {
+        "kind": "custom",
+        "template": "\\\\wsl.localhost\\Ubuntu\\home\\bancho\\.opam\\5.0.0 $prog $args"
+    }
+}
