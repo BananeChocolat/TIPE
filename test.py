@@ -71,7 +71,7 @@ def from_id(id:str) :
     for (i,c) in enumerate(id) :
         if (c =='1'):
             dense[(i//n**2) %n][(i//n) %n][i%n] = 1
-    print(dense)
+    return dense
 
 
 
@@ -103,11 +103,33 @@ def create_model(chunk:Entity, n:int=2) -> dict :
     
 
 
-def generate_struct(model:dict) -> Entity :
+def generate_struct(model:dict, n) -> np.ndarray :
     """ Genere une structure a partir d'un modele
         en utilisant une implementation de la WFC"""
-    dense = from_id(r.randint(0,len(model)-1))
-    pass
+    dense = np.zeros(shape=(256,256,256),dtype=int)
+    block = from_id(list(model.keys())[0])
+    print(block)
+    # dense[0:n, 0:n, 0:n] = block
+
+    def sub_id(x,y,z) :
+        return identifier(dense[x:x+n,y:y+n,z:z+n])
+
+    def place_sub(x,y,z,id) :
+        dense[x*n:x*n+n,y*n:y*n+n,z*n:z*n+n] = from_id(id)
+ 
+    for z in range(0,64//n) :
+        for y in range(0,64//n) :
+            for x in range(0,64//n) :
+                if (id := sub_id(x,y,z)) in model :
+                    place_sub(x+1,y,z,r.choice(model[id].xp))
+                    place_sub(x,y+1,z,r.choice(model[id].yp))
+                    place_sub(x,y,z+1,r.choice(model[id].zp))
+
+    return dense
+
+    # print(dense[:5,:5,:5])
+
+
 
 
 def place_struct(chunk:Entity, struct:Entity, x:int, y:int, z:int) -> Entity :
@@ -117,7 +139,7 @@ def saver(chunk, filename="test_file") -> None :
     """ Sauvegarde un chunk dans un fichier .vox"""
     save = Entity().from_dense(chunk)
     save.set_palette_from_file('palette.png')
-    save.save('./vox/test_file1.vox')
+    save.save(f'./vox/{filename}.vox')
     print(f"[{green}INFO{white}] Chunk saved as {filename}.vox")
 
 
@@ -127,7 +149,7 @@ class Unit:
         self.obj = np.array(obj)
         self.xp = []
         self.xm = []
-        self.yp = []
+        self.yp = []    
         self.ym = []
         self.zp = []
         self.zm = []
@@ -143,7 +165,11 @@ b = Unit([[[(i+j+k)%2 for k in range(4)] for j in range(4)] for i in range(4)])
 c = Unit([[[(i+j+k)%3 for k in range(4)] for j in range(4)] for i in range(4)])
 
 
-print(from_id('11101000'))
+new_dense = generate_struct(create_model(Entity().from_file('./vox/cubes.vox'),n=4), n=4)
+saver(new_dense, "test_file3")
+
+# print(create_model(Entity().from_file('./vox/menger.vox'),3))
+
 # large = Entity().from_file('./TIPE.vox')
 # build = np.array(large.get_dense())[6:14,6:14,8:27]
 # print(create_model(Entity().from_dense(build),2))
