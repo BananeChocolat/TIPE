@@ -1,4 +1,5 @@
 from voxypy.models import Entity, Voxel
+from pprint import pprint
 import numpy as np
 import random as r
 
@@ -83,6 +84,7 @@ def get_structures(chunk:Entity) -> dict :
 
 def create_model(chunk:Entity, n:int=2) -> dict :
     """ Cree un modele a partir d'un chunk"""
+    print(f"[{green}INFO{white}] creating model...")
     model = {}
     voxels = chunk.get_dense()
     for x in range(0, len(voxels), n):
@@ -100,30 +102,39 @@ def create_model(chunk:Entity, n:int=2) -> dict :
                 if (id_adj := identifier(voxels[x:x+n,y:y+n,max(0,z-n):z])) not in model[id].zm and id_adj is not None : model[id].zm.append(id_adj)
 
     return model
-    
+
 
 
 def generate_struct(model:dict, n) -> np.ndarray :
     """ Genere une structure a partir d'un modele
         en utilisant une implementation de la WFC"""
-    dense = np.zeros(shape=(256,256,256),dtype=int)
+    print(f"[{green}INFO{white}] generating structure...")
+    out_size = 32
+    dense = np.zeros(shape=(out_size+n,out_size+n,out_size+n),dtype=int)
     block = from_id(list(model.keys())[0])
-    print(block)
-    # dense[0:n, 0:n, 0:n] = block
 
     def sub_id(x,y,z) :
-        return identifier(dense[x:x+n,y:y+n,z:z+n])
+        return identifier(dense[x*n:x*n+n,y*n:y*n+n,z*n:z*n+n])
+        # imagine oublier les "*n", nan je rigole... mais imagine quand meme
 
     def place_sub(x,y,z,id) :
-        dense[x*n:x*n+n,y*n:y*n+n,z*n:z*n+n] = from_id(id)
- 
-    for z in range(0,64//n) :
-        for y in range(0,64//n) :
-            for x in range(0,64//n) :
-                if (id := sub_id(x,y,z)) in model :
-                    place_sub(x+1,y,z,r.choice(model[id].xp))
-                    place_sub(x,y+1,z,r.choice(model[id].yp))
-                    place_sub(x,y,z+1,r.choice(model[id].zp))
+        if int(id) == 0 : return
+        else :
+            print(x,y,z,id)
+            a = from_id(id)
+            a.resize(n,n,n)
+            print(identifier(a))
+            dense[x*n:x*n+n,y*n:y*n+n,z*n:z*n+n] = a
+
+    place_sub(0,0,0,identifier(block))
+    
+    for z in range(0,out_size//n) :
+        for y in range(0,out_size//n) :
+            for x in range(0,out_size//n) :
+                if ((id := sub_id(x,y,z)) in model) :
+                    if model[id].xp : place_sub(x+1,y,z,r.choice(model[id].xp))
+                    if model[id].yp : place_sub(x,y+1,z,r.choice(model[id].yp))
+                    if model[id].zp : place_sub(x,y,z+1,r.choice(model[id].zp))
 
     return dense
 
@@ -145,8 +156,9 @@ def saver(chunk, filename="test_file") -> None :
 
 class Unit:
     """Classe pour un cube de NxN de voxels"""
-    def __init__(self, obj):
+    def __init__(self, obj, n=2):
         self.obj = np.array(obj)
+        self.size = n
         self.xp = []
         self.xm = []
         self.yp = []    
@@ -165,8 +177,12 @@ b = Unit([[[(i+j+k)%2 for k in range(4)] for j in range(4)] for i in range(4)])
 c = Unit([[[(i+j+k)%3 for k in range(4)] for j in range(4)] for i in range(4)])
 
 
-new_dense = generate_struct(create_model(Entity().from_file('./vox/cubes.vox'),n=4), n=4)
-saver(new_dense, "test_file3")
+div = 9
+test_entity = Entity().from_file('./vox/menger.vox')
+test_model = create_model(test_entity, div)
+# pprint(test_model)
+test_gen = generate_struct(test_model, div)
+saver(test_gen, "menger_gen")
 
 # print(create_model(Entity().from_file('./vox/menger.vox'),3))
 
