@@ -2,6 +2,7 @@ from voxypy.models import Entity, Voxel
 from pprint import pprint
 import numpy as np
 import random as r
+from progress.bar import Bar
 
 green = "\u001b[32m"
 white = "\u001b[37m"
@@ -65,9 +66,8 @@ def identifier(chunk:list[list[list[int]]]) -> str :
                 id += str("1" if chunk[x][y][z] else "0")
     return id if id else None
 
-def from_id(id:str) :
+def from_id(id:str, n:int) :
     """ Renvoie un array 3d correspondant à l'id avec 0 pour vide et 1 pour plein """
-    n = int(len(id)**(1/3))
     dense = np.zeros(shape=(n,n,n),dtype=int)
     for (i,c) in enumerate(id) :
         if (c =='1'):
@@ -82,14 +82,20 @@ def get_structures(chunk:Entity) -> dict :
         Chaque structure est un Entity"""
 
 
-def create_model(chunk:Entity, n:int=2) -> dict :
+def create_model(chunk:Entity, n:int) -> dict :
     """ Cree un modele a partir d'un chunk"""
     print(f"[{green}INFO{white}] creating model...")
     model = {}
-    voxels = chunk.get_dense()
+    voxels = np.array(chunk.get_dense())
+    print(f"{len(voxels) = }")
+    print(voxels.shape)
+    if (voxels.shape[0] % n != 0) :
+        voxels.resize((voxels.shape[0] + n - voxels.shape[0] % n, voxels.shape[1], voxels.shape[2]))
+    print(f"{len(voxels) = }")
+    creation_bar = Bar('Model creation', max=len(voxels)*len(voxels[0])*len(voxels[0][0])/n**3)
     for x in range(0, len(voxels), n):
-        for y in range(0, len(voxels[x]), n):
-            for z in range(0, len(voxels[x][y]), n):
+        for y in range(0, len(voxels[0]), n):
+            for z in range(0, len(voxels[0][0]), n):
                 unit = Unit(voxels[x:x+n,y:y+n,z:z+n])
                 id = identifier(unit.obj)
                 if id not in model:
@@ -100,7 +106,9 @@ def create_model(chunk:Entity, n:int=2) -> dict :
                 if (id_adj := identifier(voxels[x:x+n,max(0,y-n):y,z:z+n])) not in model[id].ym and id_adj is not None : model[id].ym.append(id_adj)
                 if (id_adj := identifier(voxels[x:x+n,y:y+n,z+n:z+2*n])) not in model[id].zp and id_adj is not None : model[id].zp.append(id_adj)
                 if (id_adj := identifier(voxels[x:x+n,y:y+n,max(0,z-n):z])) not in model[id].zm and id_adj is not None : model[id].zm.append(id_adj)
-
+                creation_bar.next()
+    creation_bar.finish()
+    print(f"{len(model) = }")
     return model
 
 
@@ -111,7 +119,7 @@ def generate_struct(model:dict, n) -> np.ndarray :
     print(f"[{green}INFO{white}] generating structure...")
     out_size = 32
     dense = np.zeros(shape=(out_size+n,out_size+n,out_size+n),dtype=int)
-    block = from_id(list(model.keys())[0])
+    block = from_id(list(model.keys())[0], n)
 
     def sub_id(x,y,z) :
         return identifier(dense[x*n:x*n+n,y*n:y*n+n,z*n:z*n+n])
@@ -120,14 +128,14 @@ def generate_struct(model:dict, n) -> np.ndarray :
     def place_sub(x,y,z,id) :
         if int(id) == 0 : return
         else :
-            print(x,y,z,id)
-            a = from_id(id)
+            # print(x,y,z,id)
+            a = from_id(id,n)
             a.resize(n,n,n)
-            print(identifier(a))
+            # print(identifier(a))
             dense[x*n:x*n+n,y*n:y*n+n,z*n:z*n+n] = a
 
     place_sub(0,0,0,identifier(block))
-    
+
     for z in range(0,out_size//n) :
         for y in range(0,out_size//n) :
             for x in range(0,out_size//n) :
@@ -177,12 +185,12 @@ b = Unit([[[(i+j+k)%2 for k in range(4)] for j in range(4)] for i in range(4)])
 c = Unit([[[(i+j+k)%3 for k in range(4)] for j in range(4)] for i in range(4)])
 
 
-div = 9
-test_entity = Entity().from_file('./vox/menger.vox')
+div = 4
+test_entity = Entity().from_file('./vox/castle.vox')
 test_model = create_model(test_entity, div)
 # pprint(test_model)
 test_gen = generate_struct(test_model, div)
-saver(test_gen, "menger_gen")
+saver(test_gen, "castle_gen")
 
 # print(create_model(Entity().from_file('./vox/menger.vox'),3))
 
