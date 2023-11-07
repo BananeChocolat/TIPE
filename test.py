@@ -35,9 +35,6 @@ entity = Entity().from_file('./vox/test_file.vox')
 #  [[2 0]
 #   [4 3]]]
 
-
-# print(entity.get(1, 1, 1))
-
 # def get_structure(entity) :
 #     """detects the structures inside a chunk and returns a list of those structures
 #         split each struture based on color"""
