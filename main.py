@@ -61,7 +61,7 @@ def identifier(chunk:list[list[list[int]]]) -> str :
         for y in range(len(chunk[x])):
             for z in range(len(chunk[x][y])):
                 id += str("1" if chunk[x][y][z] else "0")
-    return id if id else None
+    return id if id else "".join(["0" for i in range(len(chunk)**3)])
 
 def from_id(id:str, n:int) :
     """ Renvoie un array 3d correspondant à l'id avec 0 pour vide et 1 pour plein """
@@ -84,12 +84,11 @@ def create_model(chunk:Entity, n:int) -> dict :
     print(f"[{green}INFO{white}] creating model...")
     model = {}
     voxels = np.array(chunk.get_dense())
-    print(f"{len(voxels) = }")
-    print(voxels.shape)
+    print(f"{voxels.shape = }")
     if (voxels.shape[0] % n != 0) :
-        voxels.resize((voxels.shape[0] + n - voxels.shape[0] % n, voxels.shape[1], voxels.shape[2]))
-    print(f"{len(voxels) = }")
-    creation_bar = Bar('Model creation', max=len(voxels)*len(voxels[0])*len(voxels[0][0])/n**3)
+        voxels.resize((voxels.shape[0] + n - voxels.shape[0] % n, voxels.shape[1] + n - voxels.shape[1] % n, voxels.shape[2] + n - voxels.shape[2] % n))
+    print(f"{voxels.shape = }")
+    creation_bar = Bar('Model creation', max=(len(voxels)*len(voxels[0])*len(voxels[0][0]))/n**3)
     for x in range(0, len(voxels), n):
         for y in range(0, len(voxels[0]), n):
             for z in range(0, len(voxels[0][0]), n):
@@ -131,8 +130,8 @@ def generate_struct(model:dict, n) -> np.ndarray :
             # print(identifier(a))
             dense[x*n:x*n+n,y*n:y*n+n,z*n:z*n+n] = a
 
+    generation_bar = Bar('Structure generation', max=(out_size//n)**3)
     place_sub(0,0,0,identifier(block))
-
     for z in range(0,out_size//n) :
         for y in range(0,out_size//n) :
             for x in range(0,out_size//n) :
@@ -140,12 +139,57 @@ def generate_struct(model:dict, n) -> np.ndarray :
                     if model[id].xp : place_sub(x+1,y,z,r.choice(model[id].xp))
                     if model[id].yp : place_sub(x,y+1,z,r.choice(model[id].yp))
                     if model[id].zp : place_sub(x,y,z+1,r.choice(model[id].zp))
-
+                    generation_bar.next()
+    generation_bar.finish()
     return dense
 
-    # print(dense[:5,:5,:5])
+def generate_struct_2(model:dict, n) -> np.ndarray :
+    """ Genere une structure a partir d'un modele
+        en utilisant une implementation de la WFC"""
+    print(f"[{green}INFO{white}] generating structure...")
+    out_size = 32
+    dense = np.zeros(shape=(out_size+n,out_size+n,out_size+n),dtype=int)
+    block = from_id(list(model.keys())[0], n)
 
+    def sub_id(x,y,z) :
+        if (x < 0 or y < 0 or z < 0 or x >= out_size//n or y >= out_size//n or z >= out_size//n) :
+            return identifier(np.zeros(shape=(n,n,n),dtype=int))    
+        return identifier(dense[x*n:x*n+n,y*n:y*n+n,z*n:z*n+n])
+        # imagine oublier les "*n", nan je rigole... mais imagine quand meme
 
+    def place_sub(x,y,z,id) :
+        if int(id) == 0 : return
+        else :
+            # print(x,y,z,id)
+            a = from_id(id,n)
+            a.resize(n,n,n)
+            # print(identifier(a))
+            dense[x*n:x*n+n,y*n:y*n+n,z*n:z*n+n] = a
+
+    generation_bar = Bar('Structure generation', max=(out_size//n)**3)
+    place_sub(0,0,0,identifier(block))
+    empty_id = identifier(np.zeros(shape=(n,n,n),dtype=int))
+    for z in range(0,out_size//n) :
+        for y in range(0,out_size//n) :
+            for x in range(0,out_size//n) :
+                if (sub_id(x,y,z) == empty_id) :
+                    # place a block here according to its non empty neighbors
+                    # print(f"actual {x,y,z = }")
+                    possible = []
+                    if (sub_id(x-1,y,z) != empty_id) : possible.append(sub_id(x-1,y,z))
+                    # print(f"{sub_id(x-1,y,z) = }")
+                    # if (sub_id(x+1,y,z) != empty_id) : possible.append(sub_id(x+1,y,z))
+                    if (sub_id(x,y-1,z) != empty_id) : possible.append(sub_id(x,y-1,z))
+                    # print(f"{sub_id(x,y-1,z) = }")
+                    # if (sub_id(x,y+1,z) != empty_id) : possible.append(sub_id(x,y+1,z))
+                    if (sub_id(x,y,z-1) != empty_id) : possible.append(sub_id(x,y,z-1))
+                    # print(f"{sub_id(x,y,z-1) = }")
+                    # if (sub_id(x,y,z+1) != empty_id) : possible.append(sub_id(x,y,z+1))
+                    if (possible) : place_sub(x,y,z,r.choice(possible))
+                    # print(f"{possible = }")
+                generation_bar.next()
+    generation_bar.finish()
+    return dense
 
 
 def place_struct(chunk:Entity, struct:Entity, x:int, y:int, z:int) -> Entity :
@@ -164,29 +208,22 @@ class Unit:
     def __init__(self, obj, n=2):
         self.obj = np.array(obj)
         self.size = n
-        self.xp = []
-        self.xm = []
-        self.yp = []    
-        self.ym = []
-        self.zp = []
-        self.zm = []
+        self.xp, self.xm, self.yp, self.ym, self.zp, self.zm = [], [], [], [], [], []
 
     def __repr__(self):
         return str(self.xp) + str(self.xm) + str(self.yp) + str(self.ym) + str(self.zp) + str(self.zm)
 
 
+# a = Unit([[[4,3],[2,0]],[[1,0],[0,0]]])
+# b = Unit([[[(i+j+k)%2 for k in range(4)] for j in range(4)] for i in range(4)])
+# c = Unit([[[(i+j+k)%3 for k in range(4)] for j in range(4)] for i in range(4)])
 
 
-a = Unit([[[4,3],[2,0]],[[1,0],[0,0]]])
-b = Unit([[[(i+j+k)%2 for k in range(4)] for j in range(4)] for i in range(4)])
-c = Unit([[[(i+j+k)%3 for k in range(4)] for j in range(4)] for i in range(4)])
-
-
-div = 4
+div = 3
 test_entity = Entity().from_file('./vox/castle.vox')
 test_model = create_model(test_entity, div)
 # pprint(test_model)
-test_gen = generate_struct(test_model, div)
+test_gen = generate_struct_2(test_model, div)
 saver(test_gen, "castle_gen")
 
 # print(create_model(Entity().from_file('./vox/menger.vox'),3))
